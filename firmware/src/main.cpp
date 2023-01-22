@@ -1,10 +1,12 @@
 #include <NeoPixelAnimator.h>
 #include <NeoPixelBus.h>
+#include <driver/adc.h>
 #include <driver/rtc_io.h>
 
 const uint16_t PixelCount = 16;
 const uint8_t PixelPin = 2;
 const gpio_num_t ButtonPin = GPIO_NUM_33;
+const adc1_channel_t BatteryVoltageADC = ADC1_CHANNEL_0;
 
 float maximumBrightness = 255;
 float speedFactor = 0.004;
@@ -25,13 +27,14 @@ class ColorScheme {
 };
 
 class ColorScheme1 : public ColorScheme {
-  RgbColor getColor(uint ledIndex, uint elapsedPeriods, ulong millisSincePeriod) {
+  RgbColor getColor(uint ledIndex, uint elapsedPeriods,
+                    ulong millisSincePeriod) {
     static uint ledMapping[16] = {0, 4, 8,  12, 13, 9,  5, 1,
-                                 2, 6, 10, 14, 15, 11, 7, 3};
+                                  2, 6, 10, 14, 15, 11, 7, 3};
     static RgbColor colorFinish(0, 128, 0);
-    //static RgbColor colorInProgress(128, 0, 0);
+    // static RgbColor colorInProgress(128, 0, 0);
 
-    RgbColor colorInProgress = Wheel(ledIndex + elapsedPeriods*4);
+    RgbColor colorInProgress = Wheel(ledIndex + elapsedPeriods * 4);
 
     uint i = millisSincePeriod % 65535;
     float intensity = 128 * (1.0 + sin(speedFactor * i));
@@ -63,11 +66,30 @@ class ColorScheme1 : public ColorScheme {
   }
 };
 
+float getBatteryVoltage() {
+  // 12 bit range ADC (0..4095), 0 to 1.1 V
+  //
+  // R1 = 100k (99,60k)
+  // R2 = 33k (32,48k)
+  static float r1 = 99600.0;
+  static float r2 = 32480.0;
+  static float multiplier = r2 / (r1 + r2);
+
+  int rawValue = adc1_get_raw(BatteryVoltageADC);
+  float readVoltage = (rawValue / 4095.0) * 1.1;
+  float batteryVoltage = readVoltage / multiplier;
+  return batteryVoltage;
+}
+
 void setup() {
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  adc1_config_channel_atten(BatteryVoltageADC, ADC_ATTEN_DB_0);
+  pinMode(LED_BUILTIN, OUTPUT);
+
   Serial.begin(57600);
   delay(250);
   Serial.println("starting");
-  millisSinceLastWakeUp = millis();
+  Serial.println(getBatteryVoltage());
   strip.Begin();
   strip.Show();
 }
@@ -100,6 +122,12 @@ void calculateFrame(ColorScheme& colorScheme) {
 }
 
 void loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1000);
+
+  /*
   ColorScheme1 colorScheme = ColorScheme1();
   calculateFrame(colorScheme);
 
@@ -107,4 +135,5 @@ void loop() {
     enterDeepSleep();
   }
   delay(stepDelay);
+  */
 }
